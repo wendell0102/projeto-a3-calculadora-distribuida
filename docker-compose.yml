@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    container_name: calc-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+    networks:
+      - calc-network
+    restart: unless-stopped
+
+  gateway:
+    build: ./gateway
+    container_name: calc-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - ADD_SERVICE_URL=http://calc-soma:3001
+      - SUBTRACT_SERVICE_URL=http://calc-subtracao:3002
+      - MULTIPLY_SERVICE_URL=http://calc-multiplicacao:3003
+      - DIVIDE_SERVICE_URL=http://calc-divisao:3004
+    depends_on:
+      - soma
+      - subtracao
+      - multiplicacao
+      - divisao
+    networks:
+      - calc-network
+    restart: unless-stopped
+
+  soma:
+    build: ./services/add
+    container_name: calc-soma
+    ports:
+      - "3001:3001"
+    networks:
+      - calc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  subtracao:
+    build: ./services/subtract
+    container_name: calc-subtracao
+    ports:
+      - "3002:3002"
+    networks:
+      - calc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  multiplicacao:
+    build: ./services/multiply
+    container_name: calc-multiplicacao
+    ports:
+      - "3003:3003"
+    networks:
+      - calc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  divisao:
+    build: ./services/divide
+    container_name: calc-divisao
+    ports:
+      - "3004:3004"
+    networks:
+      - calc-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  calc-network:
+    driver: bridge
