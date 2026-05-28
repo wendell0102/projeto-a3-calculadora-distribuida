@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora Distribuida</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0e1a; color: #00ffcc; font-family: 'Courier New', monospace; min-height: 100vh; }
+    .topbar { background: #0d1226; border-bottom: 1px solid #00ffcc33; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+    .topbar h1 { font-size: 1.1rem; letter-spacing: 3px; color: #00ffcc; }
+    .topbar span { font-size: 0.75rem; color: #00ffcc88; }
+    .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .card { background: #0d1226; border: 1px solid #00ffcc33; border-radius: 8px; padding: 24px; }
+    .card h2 { font-size: 0.85rem; letter-spacing: 2px; color: #00ffcc88; margin-bottom: 20px; text-transform: uppercase; }
+    .inputs { display: flex; gap: 12px; margin-bottom: 16px; }
+    .inputs input { flex: 1; background: #0a0e1a; border: 1px solid #00ffcc55; color: #00ffcc; padding: 12px; border-radius: 4px; font-size: 1.2rem; font-family: inherit; text-align: center; outline: none; }
+    .inputs input:focus { border-color: #00ffcc; }
+    .ops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+    .op-btn { background: #0a0e1a; border: 1px solid #00ffcc44; color: #00ffcc; padding: 14px; border-radius: 4px; font-size: 1.3rem; cursor: pointer; transition: all 0.2s; }
+    .op-btn:hover, .op-btn.active { background: #00ffcc; color: #0a0e1a; }
+    .calc-btn { width: 100%; background: #00ffcc; color: #0a0e1a; border: none; padding: 14px; border-radius: 4px; font-size: 1rem; letter-spacing: 2px; font-family: inherit; cursor: pointer; font-weight: bold; transition: opacity 0.2s; }
+    .calc-btn:hover { opacity: 0.85; }
+    .result { margin-top: 16px; background: #0a0e1a; border: 1px solid #00ffcc33; border-radius: 4px; padding: 16px; text-align: center; }
+    .result .value { font-size: 2rem; color: #00ffcc; }
+    .result .meta { font-size: 0.7rem; color: #00ffcc66; margin-top: 4px; }
+    .services { display: grid; gap: 10px; }
+    .svc { display: flex; align-items: center; justify-content: space-between; background: #0a0e1a; border: 1px solid #00ffcc22; border-radius: 4px; padding: 12px 16px; }
+    .svc-name { font-size: 0.85rem; letter-spacing: 1px; }
+    .svc-status { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #00ffcc; animation: pulse 2s infinite; }
+    .dot.offline { background: #ff4466; animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .logs { background: #0a0e1a; border: 1px solid #00ffcc22; border-radius: 4px; padding: 12px; height: 160px; overflow-y: auto; font-size: 0.72rem; color: #00ffcc88; }
+    .logs p { margin-bottom: 4px; }
+    .error-msg { color: #ff4466; margin-top: 8px; font-size: 0.8rem; text-align: center; }
+    @media(max-width:700px){ .container{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>CALC DISTRIBUIDA // A3</h1>
+    <span id="clock"></span>
+  </div>
+  <div class="container">
+    <div class="card">
+      <h2>Calculadora</h2>
+      <div class="inputs">
+        <input type="number" id="numA" placeholder="A" value="10">
+        <input type="number" id="numB" placeholder="B" value="5">
+      </div>
+      <div class="ops">
+        <button class="op-btn active" data-op="add" onclick="selectOp(this)">+</button>
+        <button class="op-btn" data-op="subtract" onclick="selectOp(this)">-</button>
+        <button class="op-btn" data-op="multiply" onclick="selectOp(this)">x</button>
+        <button class="op-btn" data-op="divide" onclick="selectOp(this)">/</button>
+      </div>
+      <button class="calc-btn" onclick="calculate()">CALCULAR</button>
+      <div class="result">
+        <div class="value" id="result">---</div>
+        <div class="meta" id="meta">aguardando operacao</div>
+      </div>
+      <div class="error-msg" id="error"></div>
+    </div>
+    <div class="card">
+      <h2>Status dos Servicos</h2>
+      <div class="services" id="services">
+        <div class="svc"><span class="svc-name">SOMA :3001</span><span class="svc-status"><span class="dot" id="dot-add"></span><span id="st-add">verificando...</span></span></div>
+        <div class="svc"><span class="svc-name">SUBTRACAO :3002</span><span class="svc-status"><span class="dot" id="dot-subtract"></span><span id="st-subtract">verificando...</span></span></div>
+        <div class="svc"><span class="svc-name">MULTIPLICACAO :3003</span><span class="svc-status"><span class="dot" id="dot-multiply"></span><span id="st-multiply">verificando...</span></span></div>
+        <div class="svc"><span class="svc-name">DIVISAO :3004</span><span class="svc-status"><span class="dot" id="dot-divide"></span><span id="st-divide">verificando...</span></span></div>
+      </div>
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <h2>Log de Operacoes</h2>
+      <div class="logs" id="logs"><p>[SISTEMA] Calculadora distribuida iniciada...</p></div>
+    </div>
+  </div>
+  <script>
+    const GATEWAY = 'http://localhost:8080';
+    let selectedOp = 'add';
+    function selectOp(btn) {
+      document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedOp = btn.dataset.op;
+    }
+    function log(msg) {
+      const el = document.getElementById('logs');
+      const p = document.createElement('p');
+      p.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+      el.appendChild(p);
+      el.scrollTop = el.scrollHeight;
+    }
+    async function calculate() {
+      const a = parseFloat(document.getElementById('numA').value);
+      const b = parseFloat(document.getElementById('numB').value);
+      document.getElementById('error').textContent = '';
+      document.getElementById('result').textContent = '...';
+      log('Enviando: ' + a + ' ' + selectedOp + ' ' + b);
+      try {
+        const res = await fetch(GATEWAY + '/calculate', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({operation: selectedOp, a, b})
+        });
+        const data = await res.json();
+        if (data.error) {
+          document.getElementById('result').textContent = 'ERRO';
+          document.getElementById('error').textContent = data.error;
+          log('ERRO: ' + data.error);
+        } else {
+          document.getElementById('result').textContent = data.result;
+          document.getElementById('meta').textContent = 'via ' + (data.service || 'gateway') + ' | ' + new Date().toLocaleTimeString();
+          log('Resultado: ' + data.result + ' (servico: ' + data.service + ')');
+        }
+      } catch(e) {
+        document.getElementById('result').textContent = 'OFFLINE';
+        document.getElementById('error').textContent = 'Gateway indisponivel: ' + e.message;
+        log('FALHA: gateway nao responde');
+      }
+    }
+    async function checkHealth() {
+      try {
+        const res = await fetch(GATEWAY + '/health');
+        const data = await res.json();
+        ['add','subtract','multiply','divide'].forEach(op => {
+          const status = data.services && data.services[op];
+          const dot = document.getElementById('dot-' + op);
+          const st = document.getElementById('st-' + op);
+          if (status === 'online') {
+            dot.classList.remove('offline'); st.textContent = 'ONLINE';
+          } else {
+            dot.classList.add('offline'); st.textContent = 'OFFLINE';
+          }
+        });
+      } catch(e) {
+        ['add','subtract','multiply','divide'].forEach(op => {
+          document.getElementById('dot-' + op).classList.add('offline');
+          document.getElementById('st-' + op).textContent = 'SEM CONEXAO';
+        });
+      }
+    }
+    function updateClock() {
+      document.getElementById('clock').textContent = new Date().toLocaleString('pt-BR');
+    }
+    setInterval(updateClock, 1000);
+    setInterval(checkHealth, 5000);
+    updateClock();
+    checkHealth();
+  </script>
+</body>
+</html>
