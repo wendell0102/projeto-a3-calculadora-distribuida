@@ -1,7 +1,13 @@
 const express = require('express');
 const axios = require('axios');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
 
 const SERVICES = {
   add:      process.env.ADD_SERVICE_URL      || 'http://localhost:3001',
@@ -13,21 +19,34 @@ const SERVICES = {
 const lastCache = {};
 
 app.use(express.json());
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   next();
 });
 
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  customSiteTitle: 'Calculadora Distribuida - API Docs',
+  swaggerOptions: {
+    docExpansion: 'list',
+    filter: true
+  }
+}));
+
 app.post('/calculate', async (req, res) => {
   const { operation, a, b } = req.body;
+
   if (!operation || a === undefined || b === undefined) {
     return res.status(400).json({ error: 'Parametros invalidos: operation, a e b sao obrigatorios' });
   }
+
   const serviceUrl = SERVICES[operation];
   if (!serviceUrl) {
     return res.status(400).json({ error: `Operacao desconhecida: ${operation}` });
   }
+
   try {
     const response = await axios.post(serviceUrl + '/', { a, b }, { timeout: 5000 });
     const result = response.data.result;
@@ -68,4 +87,5 @@ app.get('/health', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`[GATEWAY] Servidor central rodando na porta ${PORT}`);
   console.log('[GATEWAY] Servicos configurados:', SERVICES);
+  console.log(`[GATEWAY] Documentacao Swagger disponivel em: http://localhost:${PORT}/api-docs`);
 });
