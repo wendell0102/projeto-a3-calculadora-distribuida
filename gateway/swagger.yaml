@@ -1,0 +1,238 @@
+openapi: 3.0.3
+info:
+  title: Calculadora Distribuida - API Gateway
+  description: |
+    API Gateway central da Calculadora Distribuida com Microservicos.
+    O gateway recebe as requisicoes do frontend e as encaminha para os
+    microservicos responsaveis por cada operacao matematica.
+    Inclui Circuit Breaker com fallback via cache para tolerancia a falhas.
+  version: 1.0.0
+  contact:
+    name: Wendell
+    url: https://github.com/wendell0102/projeto-a3-calculadora-distribuida
+
+servers:
+  - url: http://localhost:8080
+    description: Gateway local (Docker)
+
+tags:
+  - name: Calculos
+    description: Operacoes matematicas distribuidas
+  - name: Monitoramento
+    description: Health check dos microservicos
+  - name: Documentacao
+    description: Swagger UI
+
+paths:
+  /calculate:
+    post:
+      tags:
+        - Calculos
+      summary: Executa uma operacao matematica
+      description: |
+        Recebe dois numeros e uma operacao e encaminha para o microservico correspondente.
+        Em caso de falha do servico, o Circuit Breaker retorna o ultimo resultado em cache (fallback).
+        Se nao houver cache disponivel, retorna erro 503.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculateRequest'
+            examples:
+              soma:
+                summary: Soma de dois numeros
+                value:
+                  operation: add
+                  a: 10
+                  b: 5
+              subtracao:
+                summary: Subtracao
+                value:
+                  operation: subtract
+                  a: 10
+                  b: 3
+              multiplicacao:
+                summary: Multiplicacao
+                value:
+                  operation: multiply
+                  a: 4
+                  b: 7
+              divisao:
+                summary: Divisao
+                value:
+                  operation: divide
+                  a: 20
+                  b: 4
+      responses:
+        '200':
+          description: Operacao realizada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculateResponseOk'
+              examples:
+                sucesso:
+                  summary: Resposta normal
+                  value:
+                    result: 15
+                    service: add
+                    status: ok
+                fallback:
+                  summary: Resposta via cache (Circuit Breaker)
+                  value:
+                    result: 15
+                    service: add
+                    status: fallback
+                    warning: Servico add indisponivel. Retornando ultimo resultado em cache.
+        '400':
+          description: Parametros invalidos ou operacao desconhecida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                parametros_faltando:
+                  summary: Parametros obrigatorios ausentes
+                  value:
+                    error: Parametros invalidos - operation, a e b sao obrigatorios
+                operacao_invalida:
+                  summary: Operacao nao reconhecida
+                  value:
+                    error: Operacao desconhecida - modulo
+        '503':
+          description: Servico indisponivel e sem cache
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUnavailableResponse'
+              example:
+                error: Servico add esta indisponivel. Os demais servicos continuam funcionando.
+                service: add
+
+  /health:
+    get:
+      tags:
+        - Monitoramento
+      summary: Verifica o status dos microservicos
+      description: |
+        Faz uma requisicao de health check para cada microservico e retorna
+        o status individual de cada um (online/offline).
+      responses:
+        '200':
+          description: Status do gateway e de todos os microservicos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                gateway: online
+                services:
+                  add: online
+                  subtract: online
+                  multiply: online
+                  divide: offline
+
+  /api-docs:
+    get:
+      tags:
+        - Documentacao
+      summary: Interface Swagger UI
+      description: Acessa a interface visual da documentacao da API (Swagger UI).
+      responses:
+        '200':
+          description: Pagina HTML do Swagger UI
+
+components:
+  schemas:
+    CalculateRequest:
+      type: object
+      required:
+        - operation
+        - a
+        - b
+      properties:
+        operation:
+          type: string
+          enum: [add, subtract, multiply, divide]
+          description: Operacao matematica a ser executada
+          example: add
+        a:
+          type: number
+          description: Primeiro operando
+          example: 10
+        b:
+          type: number
+          description: Segundo operando
+          example: 5
+
+    CalculateResponseOk:
+      type: object
+      properties:
+        result:
+          type: number
+          description: Resultado da operacao
+          example: 15
+        service:
+          type: string
+          description: Nome do microservico que processou a operacao
+          example: add
+        status:
+          type: string
+          enum: [ok, fallback]
+          description: ok = processado normalmente, fallback = retornou cache
+          example: ok
+        warning:
+          type: string
+          description: Presente apenas quando status e fallback
+          example: Servico add indisponivel. Retornando ultimo resultado em cache.
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Mensagem de erro
+          example: Parametros invalidos - operation, a e b sao obrigatorios
+
+    ServiceUnavailableResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Descricao do erro
+          example: Servico add esta indisponivel. Os demais servicos continuam funcionando.
+        service:
+          type: string
+          description: Nome do servico indisponivel
+          example: add
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        gateway:
+          type: string
+          example: online
+        services:
+          type: object
+          properties:
+            add:
+              type: string
+              enum: [online, offline]
+              example: online
+            subtract:
+              type: string
+              enum: [online, offline]
+              example: online
+            multiply:
+              type: string
+              enum: [online, offline]
+              example: online
+            divide:
+              type: string
+              enum: [online, offline]
+              example: online
