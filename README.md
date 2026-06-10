@@ -4,6 +4,7 @@
 
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)
+![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203.0-85EA2D?style=flat&logo=swagger&logoColor=black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Descrição
@@ -14,16 +15,17 @@ Sistema de calculadora distribuída desenvolvido com arquitetura de microserviç
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    INTERFACE WEB                    │
-│              (Frontend — porta 3000)                │
+│              INTERFACE WEB                          │
+│           (Frontend — porta 3000)                   │
 └────────────────────────┬────────────────────────────┘
                          │ HTTP
 ┌────────────────────────▼────────────────────────────┐
-│                 GATEWAY / SERVER                    │
-│              (Servidor Central — porta 8080)        │
+│              GATEWAY / SERVER                       │
+│         (Servidor Central — porta 8080)             │
+│      [ /calculate | /health | /api-docs ]           │
 └────┬───────────┬──────────────┬──────────────┬──────┘
      │           │              │              │
-  HTTP        HTTP            HTTP           HTTP
+   HTTP        HTTP           HTTP           HTTP
      │           │              │              │
 ┌────▼──┐  ┌────▼────┐  ┌──────▼──┐  ┌───────▼─┐
 │ SOMA  │  │ SUBTR.  │  │  MULT.  │  │  DIV.   │
@@ -40,6 +42,7 @@ projeto-a3-calculadora-distribuida/
 │   └── Dockerfile
 ├── gateway/
 │   ├── index.js            # Servidor central / roteador
+│   ├── swagger.yaml        # Especificação OpenAPI 3.0.3
 │   ├── package.json
 │   └── Dockerfile
 ├── services/
@@ -91,20 +94,112 @@ docker compose up --build
 
 Abra o navegador em: **http://localhost:3000**
 
+### 4. Acesse a documentação Swagger
+
+Abra o navegador em: **http://localhost:8080/api-docs**
+
+## Documentação da API (Swagger)
+
+O projeto conta com documentação interativa via **Swagger UI**, acessível em `http://localhost:8080/api-docs` após subir os containers.
+
+A especificação segue o padrão **OpenAPI 3.0.3** e documenta todos os endpoints do Gateway com exemplos, schemas e códigos de resposta.
+
+## Endpoints do Gateway (porta 8080)
+
+### `POST /calculate` — Executa uma operação matemática
+
+Encaminha a operação para o microserviço correspondente. Possui Circuit Breaker com fallback via cache.
+
+**Request Body:**
+```json
+{
+  "operation": "add" | "subtract" | "multiply" | "divide",
+  "a": number,
+  "b": number
+}
+```
+
+**Respostas:**
+
+| Código | Status | Descrição |
+|--------|--------|-----------|
+| `200` | `ok` | Operação realizada com sucesso pelo microserviço |
+| `200` | `fallback` | Microserviço indisponível — retornou último resultado em cache |
+| `400` | — | Parâmetros inválidos ou operação desconhecida |
+| `503` | — | Microserviço indisponível e sem cache disponível |
+
+**Exemplo de resposta de sucesso:**
+```json
+{ "result": 15, "service": "add", "status": "ok" }
+```
+
+**Exemplo de resposta fallback (Circuit Breaker):**
+```json
+{
+  "result": 15,
+  "service": "add",
+  "status": "fallback",
+  "warning": "Servico add indisponivel. Retornando ultimo resultado em cache."
+}
+```
+
+---
+
+### `GET /health` — Health check dos microserviços
+
+Retorna o status individual de cada microserviço.
+
+**Exemplo de resposta:**
+```json
+{
+  "status": "ok",
+  "gateway": "online",
+  "services": {
+    "add": "online",
+    "subtract": "online",
+    "multiply": "online",
+    "divide": "offline"
+  }
+}
+```
+
+---
+
+### `GET /api-docs` — Swagger UI
+
+Interface visual interativa da documentação da API. Permite testar os endpoints diretamente pelo navegador.
+
+## Endpoints Internos dos Microserviços
+
+Os microserviços são acessados **somente pelo Gateway** via rede interna Docker. Não ficam expostos diretamente ao frontend.
+
+| Serviço | Porta | Endpoint | Método | Body |
+|---------|-------|----------|--------|------|
+| Soma | `3001` | `/` | `POST` | `{"a": number, "b": number}` |
+| Subtração | `3002` | `/` | `POST` | `{"a": number, "b": number}` |
+| Multiplicação | `3003` | `/` | `POST` | `{"a": number, "b": number}` |
+| Divisão | `3004` | `/` | `POST` | `{"a": number, "b": number}` |
+
 ## Portas dos Serviços
 
-| Serviço        | Container          | Porta |
-|----------------|--------------------|-------|
-| Frontend       | calc-frontend      | 3000  |
-| Gateway        | calc-gateway       | 8080  |
-| Soma           | calc-soma          | 3001  |
-| Subtração      | calc-subtracao     | 3002  |
-| Multiplicação  | calc-multiplicacao | 3003  |
-| Divisão        | calc-divisao       | 3004  |
+| Serviço | Container | Porta |
+|----------------|--------------------|---------|
+| Frontend | calc-frontend | 3000 |
+| Gateway | calc-gateway | 8080 |
+| Swagger UI | calc-gateway | 8080/api-docs |
+| Soma | calc-soma | 3001 |
+| Subtração | calc-subtracao | 3002 |
+| Multiplicação | calc-multiplicacao | 3003 |
+| Divisão | calc-divisao | 3004 |
 
 ## Como Testar os Serviços
 
+### Via Swagger UI (recomendado)
+
+Acesse **http://localhost:8080/api-docs**, expanda o endpoint desejado, clique em **Try it out**, preencha os valores e clique em **Execute**.
+
 ### Via interface web
+
 Acesse http://localhost:3000, insira dois números, selecione a operação e clique em Calcular.
 
 ### Via curl (linha de comando)
@@ -139,7 +234,7 @@ O sistema implementa tolerância a falhas com as seguintes estratégias:
 
 - **Independência de containers**: cada serviço roda em seu próprio container; se um cair, os demais continuam funcionando normalmente.
 - **Circuit Breaker no Gateway**: o servidor central detecta se um microserviço está indisponível e retorna uma mensagem de erro amigável sem derrubar os outros.
-- **Fallback com cache**: para divisão, o gateway mantém o último resultado em cache como fallback.
+- **Fallback com cache**: o gateway mantém o último resultado de cada operação em cache como fallback quando o serviço está offline.
 - **Health Check**: endpoint `/health` retorna o status individual de cada microserviço.
 
 ### Demonstrando a tolerância a falhas
@@ -167,7 +262,7 @@ Toda comunicação é feita via **HTTP REST**:
 - Frontend → Gateway: `POST /calculate`
 - Gateway → Microserviço: `POST /` com `{ a, b }`
 - Microserviço → Gateway: `{ result: valor }`
-- Gateway → Frontend: `{ result: valor, service: nome }`
+- Gateway → Frontend: `{ result: valor, service: nome, status: ok|fallback }`
 
 ## Tecnologias Utilizadas
 
@@ -176,6 +271,8 @@ Toda comunicação é feita via **HTTP REST**:
 - **Docker** — containerização
 - **Docker Compose** — orquestração dos containers
 - **Axios** — comunicação HTTP entre serviços
+- **Swagger UI Express** — documentação interativa da API
+- **YAML.js** — carregamento da especificação OpenAPI
 
 ## Licença
 
